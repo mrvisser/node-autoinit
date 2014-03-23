@@ -13,6 +13,9 @@ var init = module.exports.init = function(/* (rootDirPath | options), [callback]
         throw new Error('First argument to Autoinit must either be a string (root directory path) or an object containing at least the "root" property');
     }
 
+    // By default, globally ignore internal files and node_modules
+    options.ignore = options.ignore || '^(\\.|~|node_modules)';
+
     var rootDirPath = options.root;
     var ctx = options.ctx;
     var callback = arguments[1] || function(){};
@@ -28,8 +31,8 @@ var _initDir = function(options, dirPath, callback) {
 
         meta = meta || {};
 
-        moduleInfos = _filterModules(moduleInfos, meta);
-        moduleInfos = _orderModules(moduleInfos, meta);
+        moduleInfos = _filterModules(options, meta, moduleInfos);
+        moduleInfos = _orderModules(options, meta, moduleInfos);
 
         return _initModuleInfos(options, moduleInfos, callback);
     });
@@ -153,18 +156,15 @@ var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames,
     });
 };
 
-var _filterModules = function(moduleInfos, meta) {
-    if (!_.isString(meta.ignore)) {
-        return moduleInfos;
-    }
-
-    var ignoreRegexp = new RegExp(meta.ignore);
+var _filterModules = function(options, meta, moduleInfos) {
+    var globalIgnoreRegexp = _createIgnoreRegexp(options.ignore);
+    var metaIgnoreRegexp = _createIgnoreRegexp(meta.ignore);
     return _.filter(moduleInfos, function(moduleInfo) {
-        return !ignoreRegexp.test(moduleInfo.name);
+        return (!globalIgnoreRegexp.test(moduleInfo.name) && !metaIgnoreRegexp.test(moduleInfo.name));
     });
 };
 
-var _orderModules = function(moduleInfos, meta) {
+var _orderModules = function(options, meta, moduleInfos) {
     return _.chain(moduleInfos)
         .sortBy(function(moduleInfo) {
             // Tertiary ordering ensures that directories are initialized after js files
@@ -179,6 +179,10 @@ var _orderModules = function(moduleInfos, meta) {
             return (index === -1) ? Number.MAX_VALUE : index;
         })
         .value();
+};
+
+var _createIgnoreRegexp = function(str) {
+    return (_.isString(str)) ? new RegExp(str) : new RegExp('^$');
 };
 
 var _metaPath = function(rootDirPath) {
