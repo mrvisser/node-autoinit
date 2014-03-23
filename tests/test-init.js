@@ -83,7 +83,7 @@ describe('Autoinit', function() {
             var ctx = new testutil.AutoinitContext();
             ctx.set('mykey', 'test_context_state');
 
-            autoinit.init(_testDir('test_context_state'), ctx, function(err, module) {
+            autoinit.init({'root': _testDir('test_context_state'), 'ctx': ctx}, function(err, module) {
                 assert.ok(!err);
                 assert.ok(module.api);
                 assert.ok(module.api.util);

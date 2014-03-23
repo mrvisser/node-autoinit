@@ -4,41 +4,33 @@ var fs = require('fs');
 var path = require('path');
 var util = require('util');
 
-var init = module.exports.init = function(/* rootDirPath, [ctx], [callback] */) {
-    if (!_.isString(arguments[0])) {
-        throw new Error('First argument to Autoinit must be a string (root directory)');
+var init = module.exports.init = function(/* (rootDirPath | options), [callback] */) {
+
+    var options = (_.isString(arguments[0])) ? {'root': arguments[0]} : arguments[0];
+
+    // Validate the arguments
+    if (!_.isObject(options) || !_.isString(options.root)) {
+        throw new Error('First argument to Autoinit must either be a string (root directory path) or an object containing at least the "root" property');
     }
 
-    var rootDirPath = arguments[0];
-    var ctx = null;
-    var callback = function(){};
+    var rootDirPath = options.root;
+    var ctx = options.ctx;
+    var callback = arguments[1] || function(){};
 
-    if (_.isFunction(arguments[1])) {
-        callback = arguments[1];
-    } else if (_.isObject(arguments[1])) {
-        ctx = arguments[1];
-    }
-
-    if (_.isFunction(arguments[2])) {
-        callback = arguments[2];
-    }
-
-    return _initDir(rootDirPath, ctx, function(err, module) {
-        return callback(err, module);
-    });
+    return _initDir(options, options.root, callback);
 };
 
-var _initDir = function(rootDirPath, ctx, callback) {
-    _readModules(rootDirPath, function(err, meta, moduleInfos) {
+var _initDir = function(options, dirPath, callback) {
+    _readModules(dirPath, function(err, meta, moduleInfos) {
         if (err) {
             return callback(err);
         }
 
-        return _initModuleInfos(ctx, moduleInfos, callback);
+        return _initModuleInfos(options, moduleInfos, callback);
     });
 };
 
-var _initModuleInfos = function(ctx, moduleInfos, callback, _module) {
+var _initModuleInfos = function(options, moduleInfos, callback, _module) {
     _module = _module || {};
     if (_.isEmpty(moduleInfos)) {
         return callback(null, _module);
@@ -52,7 +44,7 @@ var _initModuleInfos = function(ctx, moduleInfos, callback, _module) {
     } else if (moduleInfo.type === 'directory') {
         // For a directory, we recursively load everything inside of it as
         // the module
-        _initDir(moduleInfo.path, ctx, function(err, module) {
+        _initDir(options, moduleInfo.path, function(err, module) {
             if (err) {
                 return callback(err);
             }
@@ -60,7 +52,7 @@ var _initModuleInfos = function(ctx, moduleInfos, callback, _module) {
             // Seed the module object
             _module[moduleInfo.name] = _module[moduleInfo.name] || {};
             _.extend(_module[moduleInfo.name], module);
-            return _initModuleInfos(ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options, moduleInfos, callback, _module);
         });
     } else if (moduleInfo.type === 'js') {
         var jsPackage = require(moduleInfo.path);
@@ -73,7 +65,7 @@ var _initModuleInfos = function(ctx, moduleInfos, callback, _module) {
             }
 
             _module[moduleInfo.name] = jsPackage;
-            return _initModuleInfos(ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
         }
 
         // Since we're dealing with an object, we'll seed it as one and overload the existing one if applicable
@@ -82,18 +74,18 @@ var _initModuleInfos = function(ctx, moduleInfos, callback, _module) {
         // If there is no init method, we simply return with the package itself as the module
         if (!_.isFunction(jsPackage.init)) {
             _.extend(_module[moduleInfo.name], jsPackage);
-            return _initModuleInfos(ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
         }
 
         // If the node module does have an init method, we invoke it with (optionally) the ctx if intended to be invoked with one
-        jsPackage.init.apply(jsPackage, _.compact([ctx, function(err, module) {
+        jsPackage.init.apply(jsPackage, _.compact([options.ctx, function(err, module) {
             if (err) {
                 return callback(err);
             }
 
             // The init method can provide the module to use. If it doesn't, we use the jsPackage object itself
             _.extend(_module[moduleInfo.name], module || jsPackage);
-            return _initModuleInfos(ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
         }]));
     }
 };
