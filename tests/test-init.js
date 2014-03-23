@@ -109,6 +109,36 @@ describe('Autoinit', function() {
             return callback();
         });
     });
+
+    it('will load in the order specified by autoinit.js, with js files before directories', function(callback) {
+        var ctx = {'order': []};
+        autoinit.init({'root': _testDir('test_init_module_ordering'), 'ctx': ctx}, function(err, module) {
+            assert.ok(!err, JSON.stringify(err, null, 2));
+            assert.ok(module.a);
+            assert.ok(module.a.root);
+            assert.ok(module.b);
+            assert.ok(module.b.root);
+            assert.ok(module.c);
+            assert.ok(module.c.ca);
+            assert.ok(module.c.ca.root);
+            assert.ok(module.c.cb);
+            assert.ok(module.c.cc.root);
+
+            // Ensure we populated the context in the correct order
+            assert.strictEqual(ctx.order.length, 9);
+            assert.strictEqual(ctx.order[0], 'b.js');
+            assert.strictEqual(ctx.order[1], 'b');
+            assert.strictEqual(ctx.order[2], 'a.js');
+            assert.strictEqual(ctx.order[3], 'a');
+            assert.strictEqual(ctx.order[4], 'c.js');
+            assert.strictEqual(ctx.order[5], 'ca.js');
+            assert.strictEqual(ctx.order[6], 'ca');
+            assert.strictEqual(ctx.order[7], 'cb.js');
+            assert.strictEqual(ctx.order[8], 'cc');
+
+            return callback();
+        });
+    });
 });
 
 var _testDir = function(dirName) {

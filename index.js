@@ -26,7 +26,9 @@ var _initDir = function(options, dirPath, callback) {
             return callback(err);
         }
 
-        return _initModuleInfos(options, moduleInfos, callback);
+        meta = meta || {};
+
+        return _initModuleInfos(options, _orderModules(moduleInfos, meta.order), callback);
     });
 };
 
@@ -65,7 +67,7 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
             }
 
             _module[moduleInfo.name] = jsPackage;
-            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options, moduleInfos, callback, _module);
         }
 
         // Since we're dealing with an object, we'll seed it as one and overload the existing one if applicable
@@ -74,7 +76,7 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
         // If there is no init method, we simply return with the package itself as the module
         if (!_.isFunction(jsPackage.init)) {
             _.extend(_module[moduleInfo.name], jsPackage);
-            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options, moduleInfos, callback, _module);
         }
 
         // If the node module does have an init method, we invoke it with (optionally) the ctx if intended to be invoked with one
@@ -85,47 +87,43 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
 
             // The init method can provide the module to use. If it doesn't, we use the jsPackage object itself
             _.extend(_module[moduleInfo.name], module || jsPackage);
-            return _initModuleInfos(options.ctx, moduleInfos, callback, _module);
+            return _initModuleInfos(options, moduleInfos, callback, _module);
         }]));
     }
 };
 
 var _readModules = function(rootDirPath, callback) {
     var meta = null;
-    fs.exists(_metaPath(rootDirPath), function(err, exists) {
+    try {
+        meta = require(_metaPath(rootDirPath));
+    } catch (ex) {}
+
+    fs.readdir(rootDirPath, function(err, fileNames) {
         if (err) {
             return callback(err);
-        } else if (exists) {
-            meta = require(_metaPath(rootDirPath));
         }
 
-        fs.readdir(rootDirPath, function(err, fileNames) {
+        _categorizeFileNames(rootDirPath, fileNames, function(err, dirNames, jsFileNames) {
             if (err) {
                 return callback(err);
             }
 
-            _categorizeFileNames(rootDirPath, fileNames, function(err, dirNames, jsFileNames) {
-                if (err) {
-                    return callback(err);
-                }
-
-                return callback(null, meta, _.union(
-                    _.map(dirNames, function(dirName) {
-                        return {
-                            'type': 'directory',
-                            'name': dirName,
-                            'path': path.join(rootDirPath, dirName)
-                        };
-                    }),
-                    _.map(jsFileNames, function(jsFileName) {
-                        return {
-                            'type': 'js',
-                            'name': jsFileName.split('.').slice(0, -1).join('.'),
-                            'path': path.join(rootDirPath, jsFileName)
-                        };
-                    })
-                ));
-            });
+            return callback(null, meta, _.union(
+                _.map(dirNames, function(dirName) {
+                    return {
+                        'type': 'directory',
+                        'name': dirName,
+                        'path': path.join(rootDirPath, dirName)
+                    };
+                }),
+                _.map(jsFileNames, function(jsFileName) {
+                    return {
+                        'type': 'js',
+                        'name': jsFileName.split('.').slice(0, -1).join('.'),
+                        'path': path.join(rootDirPath, jsFileName)
+                    };
+                })
+            ));
         });
     });
 };
@@ -134,7 +132,7 @@ var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames,
     _dirNames = _dirNames || [];
     _jsFileNames = _jsFileNames || [];
     if (_.isEmpty(fileNames)) {
-        return callback(null, _dirNames.sort(), _jsFileNames.sort());
+        return callback(null, _dirNames, _jsFileNames);
     }
 
     var fileName = fileNames.pop();
@@ -150,6 +148,23 @@ var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames,
 
         return _categorizeFileNames(rootDirPath, fileNames, callback, _dirNames, _jsFileNames);
     });
+};
+
+var _orderModules = function(moduleInfos, order) {
+    return _.chain(moduleInfos)
+        .sortBy(function(moduleInfo) {
+            // Tertiary ordering ensures that directories are initialized after js files
+            return (moduleInfo.type === 'directory') ? 1 : 0;
+        })
+        .sortBy('name')
+        .sortBy(function(moduleInfo) {
+            // Primary ordering is those that are specified in the autoinit.js ordering. If
+            // a module is not specified, they are ordered alphabetically after the group of
+            // explicitly ordered modules
+            var index = _.indexOf(order, moduleInfo.name);
+            return (index === -1) ? Number.MAX_VALUE : index;
+        })
+        .value();
 };
 
 var _metaPath = function(rootDirPath) {
