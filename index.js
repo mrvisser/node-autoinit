@@ -28,7 +28,10 @@ var _initDir = function(options, dirPath, callback) {
 
         meta = meta || {};
 
-        return _initModuleInfos(options, _orderModules(moduleInfos, meta.order), callback);
+        moduleInfos = _filterModules(moduleInfos, meta);
+        moduleInfos = _orderModules(moduleInfos, meta);
+
+        return _initModuleInfos(options, moduleInfos, callback);
     });
 };
 
@@ -150,7 +153,18 @@ var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames,
     });
 };
 
-var _orderModules = function(moduleInfos, order) {
+var _filterModules = function(moduleInfos, meta) {
+    if (!_.isString(meta.ignore)) {
+        return moduleInfos;
+    }
+
+    var ignoreRegexp = new RegExp(meta.ignore);
+    return _.filter(moduleInfos, function(moduleInfo) {
+        return !ignoreRegexp.test(moduleInfo.name);
+    });
+};
+
+var _orderModules = function(moduleInfos, meta) {
     return _.chain(moduleInfos)
         .sortBy(function(moduleInfo) {
             // Tertiary ordering ensures that directories are initialized after js files
@@ -161,7 +175,7 @@ var _orderModules = function(moduleInfos, order) {
             // Primary ordering is those that are specified in the autoinit.js ordering. If
             // a module is not specified, they are ordered alphabetically after the group of
             // explicitly ordered modules
-            var index = _.indexOf(order, moduleInfo.name);
+            var index = _.indexOf(meta.order, moduleInfo.name);
             return (index === -1) ? Number.MAX_VALUE : index;
         })
         .value();

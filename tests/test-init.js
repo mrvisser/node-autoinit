@@ -5,7 +5,7 @@ var assert = require('assert');
 var path = require('path');
 
 describe('Autoinit', function() {
-    
+
     it('returns empty module for empty directory', function(callback) {
         autoinit.init(_testDir('test_init_empty'), function(err, module) {
             assert.ifError(err);
@@ -110,10 +110,10 @@ describe('Autoinit', function() {
         });
     });
 
-    it('will load in the order specified by autoinit.js, with js files before directories', function(callback) {
+    it('will load in the order specified by autoinit.json, with js files before directories', function(callback) {
         var ctx = {'order': []};
         autoinit.init({'root': _testDir('test_init_module_ordering'), 'ctx': ctx}, function(err, module) {
-            assert.ok(!err, JSON.stringify(err, null, 2));
+            assert.ifError(err);
             assert.ok(module.a);
             assert.ok(module.a.root);
             assert.ok(module.b);
@@ -136,6 +136,17 @@ describe('Autoinit', function() {
             assert.strictEqual(ctx.order[7], 'cb.js');
             assert.strictEqual(ctx.order[8], 'cc');
 
+            return callback();
+        });
+    });
+
+    it('ignores matches specified in the autoinit.json', function(callback) {
+        autoinit.init(_testDir('test_init_ignore_autoinit'), function(err, module) {
+            assert.ifError(err);
+            assert.ok(module.not_excluded);
+            assert.ok(module.not_excluded_file);
+            assert.ok(!module.excluded);
+            assert.ok(!module.excluded_file);
             return callback();
         });
     });
