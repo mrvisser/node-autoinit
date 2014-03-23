@@ -4,6 +4,9 @@ var fs = require('fs');
 var path = require('path');
 var util = require('util');
 
+// Always globally ignore internal files and node_modules
+var IGNORE_BASE_REGEXP = '^(\\.|~|node_modules)';
+
 var init = module.exports.init = function(/* (rootDirPath | options), [callback] */) {
 
     var options = (_.isString(arguments[0])) ? {'root': arguments[0]} : arguments[0];
@@ -12,9 +15,6 @@ var init = module.exports.init = function(/* (rootDirPath | options), [callback]
     if (!_.isObject(options) || !_.isString(options.root)) {
         throw new Error('First argument to Autoinit must either be a string (root directory path) or an object containing at least the "root" property');
     }
-
-    // By default, globally ignore internal files and node_modules
-    options.ignore = options.ignore || '^(\\.|~|node_modules)';
 
     var rootDirPath = options.root;
     var ctx = options.ctx;
@@ -157,10 +157,11 @@ var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames,
 };
 
 var _filterModules = function(options, meta, moduleInfos) {
-    var globalIgnoreRegexp = _createIgnoreRegexp(options.ignore);
-    var metaIgnoreRegexp = _createIgnoreRegexp(meta.ignore);
+    var globalIgnoreRegexp = _createIgnoreRegexp(IGNORE_BASE_REGEXP);
+    var optionsIgnoreRegexp = _createIgnoreRegexp(options.ignore);
+    var autoinitIgnoreRegexp = _createIgnoreRegexp(meta.ignore);
     return _.filter(moduleInfos, function(moduleInfo) {
-        return (!globalIgnoreRegexp.test(moduleInfo.name) && !metaIgnoreRegexp.test(moduleInfo.name));
+        return (!globalIgnoreRegexp.test(moduleInfo.name) && !optionsIgnoreRegexp.test(moduleInfo.name) && !autoinitIgnoreRegexp.test(moduleInfo.name));
     });
 };
 

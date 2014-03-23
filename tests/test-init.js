@@ -140,6 +140,34 @@ describe('Autoinit', function() {
         });
     });
 
+    it('ignores internal files by default', function(callback) {
+        autoinit.init(_testDir('test_init_ignore_global'), function(err, module) {
+            assert.ifError(err);
+            assert.ok(module.not_excluded);
+            assert.ok(module.not_excluded_file);
+            assert.ok(module.excluded);
+            assert.ok(module.excluded_file);
+            assert.ok(!module['.totally_internal']);
+            assert.ok(!module['~totally_internal']);
+            assert.ok(!module.node_modules);
+            return callback();
+        });
+    });
+
+    it('ignores patterns specified by init options', function(callback) {
+        autoinit.init({'root': _testDir('test_init_ignore_global'), 'ignore': '^excluded'}, function(err, module) {
+            assert.ifError(err);
+            assert.ok(module.not_excluded);
+            assert.ok(module.not_excluded_file);
+            assert.ok(!module.excluded);
+            assert.ok(!module.excluded_file);
+            assert.ok(!module['.totally_internal']);
+            assert.ok(!module['~totally_internal']);
+            assert.ok(!module.node_modules);
+            return callback();
+        });
+    });
+
     it('ignores matches specified in the autoinit.json', function(callback) {
         autoinit.init(_testDir('test_init_ignore_autoinit'), function(err, module) {
             assert.ifError(err);
@@ -147,17 +175,6 @@ describe('Autoinit', function() {
             assert.ok(module.not_excluded_file);
             assert.ok(!module.excluded);
             assert.ok(!module.excluded_file);
-            return callback();
-        });
-    });
-
-    it('ignores matches specified in the global initialization options by default', function(callback) {
-        autoinit.init({'root': _testDir('test_init_ignore_global')}, function(err, module) {
-            assert.ifError(err);
-            assert.ok(module.not_excluded);
-            assert.ok(module.not_excluded_file);
-            assert.ok(module.excluded);
-            assert.ok(module.excluded_file);
             assert.ok(!module['.totally_internal']);
             assert.ok(!module['~totally_internal']);
             assert.ok(!module.node_modules);
