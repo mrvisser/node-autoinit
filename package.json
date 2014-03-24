@@ -1,7 +1,7 @@
 {
   "name": "autoinit",
   "description": "A utility that loads and initializes a directory structure of node modules",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "homepage": "https://github.com/mrvisser/node-autoinit",
   "author": {
     "name": "Branden Visser",
