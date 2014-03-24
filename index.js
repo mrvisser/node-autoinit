@@ -8,7 +8,6 @@ var util = require('util');
 var IGNORE_BASE_REGEXP = '^(\\.|~|node_modules)';
 
 var init = module.exports.init = function(/* (rootDirPath | options), [callback] */) {
-
     var options = (_.isString(arguments[0])) ? {'root': arguments[0]} : arguments[0];
 
     // Validate the arguments
@@ -16,14 +15,15 @@ var init = module.exports.init = function(/* (rootDirPath | options), [callback]
         throw new Error('First argument to Autoinit must either be a string (root directory path) or an object containing at least the "root" property');
     }
 
+    var initState = {'destroyOps': []};
     var rootDirPath = options.root;
     var ctx = options.ctx;
     var callback = arguments[1] || function(){};
 
-    return _initDir(options, options.root, callback);
+    return _initDir(initState, options, options.root, callback);
 };
 
-var _initDir = function(options, dirPath, callback) {
+var _initDir = function(initState, options, dirPath, callback) {
     _readModules(dirPath, function(err, meta, moduleInfos) {
         if (err) {
             return callback(err);
@@ -34,14 +34,14 @@ var _initDir = function(options, dirPath, callback) {
         moduleInfos = _filterModules(options, meta, moduleInfos);
         moduleInfos = _orderModules(options, meta, moduleInfos);
 
-        return _initModuleInfos(options, moduleInfos, callback);
+        return _initModuleInfos(initState, options, moduleInfos, callback);
     });
 };
 
-var _initModuleInfos = function(options, moduleInfos, callback, _module) {
+var _initModuleInfos = function(initState, options, moduleInfos, callback, _module) {
     _module = _module || {};
     if (_.isEmpty(moduleInfos)) {
-        return callback(null, _module);
+        return callback(null, _module, _createDestroyFunction(options, _module, initState.destroyOps));
     }
 
     var moduleInfo = moduleInfos.shift();
@@ -52,7 +52,7 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
     } else if (moduleInfo.type === 'directory') {
         // For a directory, we recursively load everything inside of it as
         // the module
-        _initDir(options, moduleInfo.path, function(err, module) {
+        _initDir(initState, options, moduleInfo.path, function(err, module) {
             if (err) {
                 return callback(err);
             }
@@ -60,7 +60,7 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
             // Seed the module object
             _module[moduleInfo.name] = _module[moduleInfo.name] || {};
             _.extend(_module[moduleInfo.name], module);
-            return _initModuleInfos(options, moduleInfos, callback, _module);
+            return _initModuleInfos(initState, options, moduleInfos, callback, _module);
         });
     } else if (moduleInfo.type === 'js') {
         var jsPackage = require(moduleInfo.path);
@@ -73,16 +73,24 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
             }
 
             _module[moduleInfo.name] = jsPackage;
-            return _initModuleInfos(options, moduleInfos, callback, _module);
+            return _initModuleInfos(initState, options, moduleInfos, callback, _module);
         }
 
         // Since we're dealing with an object, we'll seed it as one and overload the existing one if applicable
         _module[moduleInfo.name] = _module[moduleInfo.name] || {};
 
+        // If there is a destroy method, we keep track of it for the auto-destroy mechanism
+        if (_.isFunction(jsPackage.destroy)) {
+            initState.destroyOps.push({
+                '_this': jsPackage,
+                'method': jsPackage.destroy
+            });
+        }
+
         // If there is no init method, we simply return with the package itself as the module
         if (!_.isFunction(jsPackage.init)) {
             _.extend(_module[moduleInfo.name], jsPackage);
-            return _initModuleInfos(options, moduleInfos, callback, _module);
+            return _initModuleInfos(initState, options, moduleInfos, callback, _module);
         }
 
         // If the node module does have an init method, we invoke it with (optionally) the ctx if intended to be invoked with one
@@ -93,7 +101,7 @@ var _initModuleInfos = function(options, moduleInfos, callback, _module) {
 
             // The init method can provide the module to use. If it doesn't, we use the jsPackage object itself
             _.extend(_module[moduleInfo.name], module || jsPackage);
-            return _initModuleInfos(options, moduleInfos, callback, _module);
+            return _initModuleInfos(initState, options, moduleInfos, callback, _module);
         }]));
     }
 };
@@ -132,6 +140,29 @@ var _readModules = function(rootDirPath, callback) {
             ));
         });
     });
+};
+
+var _createDestroyFunction = function(options, module, destroyOps) {
+
+    var _destroy = function(callback) {
+        callback = callback || function(){};
+        if (_.isEmpty(destroyOps)) {
+            return callback();
+        }
+
+        // Run each destroy operation aggregated during the init phase
+        // in reverse order
+        var op = destroyOps.pop();
+        op.method.call(op._this, function(err) {
+            if (err) {
+                return callback(err);
+            }
+
+            return _destroy(callback);
+        });
+    };
+
+    return _destroy;
 };
 
 var _categorizeFileNames = function(rootDirPath, fileNames, callback, _dirNames, _jsFileNames) {

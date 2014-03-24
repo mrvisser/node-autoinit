@@ -19,7 +19,9 @@ module.exports = function(grunt) {
         'release': {
             'options': {
                 'github': {
-                    'repo': 'mrvisser/node-autoinit'
+                    'repo': 'mrvisser/node-autoinit',
+                    'usernameVar': 'GITHUB_USERNAME',
+                    'passwordVar': 'GITHUB_PASSWORD'
                 }
             }
         }

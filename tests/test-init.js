@@ -183,6 +183,46 @@ describe('Autoinit', function() {
     });
 });
 
+describe('Autodestroy', function() {
+
+    it('destroys modules in reverse order that it was initialized', function(callback) {
+        var ctx = {'init': [], 'destroy': []};
+        autoinit.init({'root': _testDir('test_destroy'), 'ctx': ctx}, function(err, module, destroy) {
+            assert.ifError(err);
+            assert.ok(module.a);
+            assert.ok(module.b);
+            assert.ok(module.c);
+
+            assert.strictEqual(ctx.init.length, 2);
+            assert.strictEqual(ctx.destroy.length, 0);
+            assert.strictEqual(ctx.init[0], 'a');
+            assert.strictEqual(ctx.init[1], 'c');
+
+            destroy(function(err) {
+                assert.ifError(err);
+
+                assert.strictEqual(ctx.init.length, 2);
+                assert.strictEqual(ctx.destroy.length, 2);
+                assert.strictEqual(ctx.destroy[0], 'c');
+                assert.strictEqual(ctx.destroy[1], 'a');
+
+                return callback();
+            });
+        });
+    });
+
+    it('returns an error when one is returned during destroy', function(callback) {
+        autoinit.init(_testDir('test_destroy_error'), function(err, module, destroy) {
+            assert.ifError(err);
+            destroy(function(err) {
+                assert.ok(err);
+                assert.strictEqual(err.message, 'test_destroy_error');
+                return callback();
+            });
+        });
+    });
+});
+
 var _testDir = function(dirName) {
     return path.join(__dirname, 'modules', dirName);
 };
